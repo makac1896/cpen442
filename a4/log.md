@@ -2,7 +2,7 @@
 
 Working notes: decisions, trade-offs, what was dropped and why, results, assumptions, open questions.
 Newest state of each question is at the top of its section; the history is below it.
-Q3 (file injection) has not been started.
+Q3 (file injection): benchmark mode built, attack not started.
 
 ## Status
 
@@ -10,7 +10,7 @@ Q3 (file injection) has not been started.
 |---|---|---|---|
 | Q1 `attack_unkeyed` | done | done | 100% QRR (10/10) |
 | Q2 `attack_secure` | done (v1, tuned) | done | 95.6% on `tests.py` (10 trials), 0.34 s/trial |
-| Q3 injection | not started | not started | |
+| Q3 injection | benchmark only | not started | baseline (no injection) 94.9% on dev |
 
 ## Repo and tooling decisions
 
@@ -124,7 +124,30 @@ Time of the shipped version in the benchmark: 0.32–0.38 s/trial (default profi
 
 ## Q3 – injection
 
-Not started. Ideas recorded from planning (untested):
+### Benchmark (done, no attack yet)
+
+`python bench.py --mode injection "plan=none" "plan=probe"` (add `--seeds holdout`, `--profile ...`).
+
+- Same trials as `tests.py`: same split, same three query draws, same shuffle after injection. Verified: running `tests.run_all` with a no-injection shim over seeds 0-29 gives 94.9%, identical to the benchmark's `plan=none`.
+- Time counts `choose_injected_documents` + `attack_injection`, as in `tests.py` (limit 10 s).
+- Extra diagnostics: if an attack returns `(guesses, {"columns": [...]})` (one column per injected document, in injection order), the benchmark reports how often it found the injected documents (as a set) and in the right order. The benchmark knows the true positions because it tracks the injected set objects through the shuffle.
+- New profile `long_docs`: three documents merged into one, to test what happens when natural documents are long (news-like data) and the injected documents are harder to tell apart from them.
+- Candidates live in `lab.injection(plan=...)`. `plan=none` (no injection, plain secure attack) is the baseline. `plan=probe` is a harness self-test (one document with all keywords, found by its column count): it located the column in 100% of trials on every profile.
+
+Reference QRR for `plan=none` (dev seeds, 30 trials), the numbers an injection attack has to beat:
+
+| profile | QRR | collapsed (<50%) | s/trial |
+|---|---|---|---|
+| default | 94.9 ± 0.48 | 0 | 0.43 |
+| long_docs | 66.2 ± 3.98 | 5 | 0.60 |
+| small_aux | 71.0 ± 1.50 | 0 | 0.60 |
+| small_client | 74.1 ± 2.74 | 2 | 0.55 |
+
+Natural document sizes on Enron (keywords per document, out of 200): mean 13.6, median 10, p95 41, p99 58, max 70. With about half the keywords queried, a natural document appears in about 7 queries on average (at most ~35), a planted document with ~100 keywords in ~50.
+
+### Planning notes
+
+Ideas recorded from planning (untested):
 - 3 injected documents give 2³ = 8 membership codes, which splits the keyword space into ~25-word groups.
 - Choose the groups from aux statistics so that easily confused keywords get different codes.
 - The injected documents must be recognisable among Alice's shuffled documents (they match many queries; natural documents match few), and the order of the three must be resolved.

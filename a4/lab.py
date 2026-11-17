@@ -43,3 +43,20 @@ def secure(queries, keyword_space, aux_documents, num_documents,
         assignment = new_assignment
 
     return [keyword_space[k] for k in assignment]
+
+
+def injection(plan="none", **opts):
+    """Returns (choose_injected_documents, attack_injection) for the injection benchmark."""
+    import a4
+
+    if plan == "none":  # no injection: the plain secure attack, as a baseline
+        return (lambda keyword_space, max_documents, aux: [],
+                lambda queries, keyword_space, aux, n, injected: a4.attack_secure(queries, keyword_space, aux, n))
+
+    if plan == "probe":  # harness self-test: one document with every keyword, found by its column count
+        def attack(queries, keyword_space, aux, n, injected):
+            hits = np.bincount(np.concatenate([d for _t, d in queries]).astype(int), minlength=n)
+            return a4.attack_secure(queries, keyword_space, aux, n), {"columns": [int(hits.argmax())]}
+        return (lambda keyword_space, max_documents, aux: [set(keyword_space)]), attack
+
+    raise ValueError(plan)
