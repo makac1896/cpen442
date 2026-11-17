@@ -20,17 +20,13 @@ from sse import h, h_key, aes_ctr, access_pattern_to_documents
 
 
 def attack_unkeyed(index, queries, keyword_space) -> list[str]:
-    """Section 3: the "unkeyed" scheme.
-
-    The token of a keyword is h(b"token" + w) and involves no secret, so we compute the
-    token of every keyword in the keyword space and look each query's token up in that table.
-    """
+    """Section 3: the "unkeyed" scheme."""
     token_to_keyword = {h(b"token" + w.encode()): w for w in keyword_space}
     return [token_to_keyword[token] for token, _documents in queries]
 
 
 def _aux_statistics(keyword_space, aux_documents):
-    """Frequency f[w] and co-occurrence C[w][v] (fractions of documents) in the aux dataset."""
+    """Fraction of aux documents containing each keyword (diagonal) or each pair of keywords."""
     index = {w: k for k, w in enumerate(keyword_space)}
     A = np.zeros((len(aux_documents), len(keyword_space)))
     for d, doc in enumerate(aux_documents):
@@ -43,29 +39,23 @@ def _aux_statistics(keyword_space, aux_documents):
 
 
 def attack_secure(queries, keyword_space, aux_documents, num_documents, rounds=10, lam=1.0) -> list[str]:
-    """Section 4: the "secure" scheme.
-
-    First pass: match query result counts to aux keyword frequencies with an optimal
-    one-to-one assignment, then repeatedly re-score each (query, keyword) pair by how well
-    the query's overlaps with the other queries match the aux co-occurrences of the keywords
-    those queries are currently believed to be, and re-solve the assignment.
-    """
-    n, Q, K = num_documents, len(queries), len(keyword_space)
+    """Section 4: the "secure" scheme."""
+    n, Q = num_documents, len(queries)
     C = _aux_statistics(keyword_space, aux_documents)
     f = np.diag(C)
 
     R = np.zeros((n, Q))
     for i, (_token, documents) in enumerate(queries):
         R[documents, i] = 1.0
-    overlap = R.T @ R                      # overlap[i][j] = number of docs shared by queries i and j
+    overlap = R.T @ R  # documents shared by each pair of queries
     count = np.diag(overlap)
 
     freq_cost = (count[:, None] - n * f[None, :]) ** 2 / (2 * n * f * (1 - f))[None, :]
-    rows, assignment = linear_sum_assignment(freq_cost)
+    _, assignment = linear_sum_assignment(freq_cost)
 
     off_diagonal = (1.0 - np.eye(Q))[:, None, :]
     for _ in range(rounds):
-        Cp = C[:, assignment]              # Cp[w][j] = aux co-occurrence of w with j's current guess
+        Cp = C[:, assignment]  # co-occurrence of each keyword with the current guesses
         expected, variance = n * Cp, n * Cp * (1 - Cp)
         diff = overlap[:, None, :] - expected[None, :, :]
         overlap_cost = (diff ** 2 / (2 * variance)[None, :, :] * off_diagonal).sum(axis=2)
