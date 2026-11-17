@@ -1,0 +1,90 @@
+% CPEN 442 -- Assignment 4 answer template (optional).
+% Fill in your name(s) and answers below, compile, and submit the PDF as a4.pdf.
+% You do not have to use LaTeX: any readable PDF is fine.
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[dvipsnames,table]{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{tabularx}
+\usepackage[T1]{fontenc}
+\usepackage{needspace}
+
+\definecolor{alicepink}{rgb}{0.98,0.51,1.}
+\definecolor{aliceblue}{rgb}{0.7, 1, 1}
+\definecolor{background}{rgb}{1, 0.98, 0.95}
+
+\lstset{frame=tb, language=Python, showstringspaces=false, columns=flexible,
+  basicstyle={\small\ttfamily}, breaklines=true, backgroundcolor=\color{background}}
+
+\setlength{\parindent}{0in}
+\setlength{\parskip}{\baselineskip}
+
+\newcommand{\question}[2]{\textbf{\colorbox{aliceblue}{[#2 pts]} Question #1}}
+
+% Box to write each answer in. It grows with its content.
+\newtcolorbox{answer}{colback=white, colframe=black, boxrule=0.6pt,
+  sharp corners, breakable, height from=5cm to 50cm}
+
+\begin{document}
+
+\begin{center}
+    THE UNIVERSITY OF BRITISH COLUMBIA\\
+    Electrical and Computer Engineering Department\\[\baselineskip]
+    {\bf CPEN 442\hfill Introduction to Cybersecurity\hfill Winter Term 1, 2026}
+    \vspace{1cm}
+
+    {\sc \Large Assignment 4: Cryptography Applications -- Searchable Encryption}
+\end{center}
+
+% One or two students. Delete the second row if you worked alone.
+\begin{tabularx}{\textwidth}{|X|l|}
+    \hline
+    \rowcolor{gray!15} \textbf{Name} & \textbf{Student number} \\
+    \hline
+    First Last & 12345678 \\
+    \hline
+    First Last & 12345678 \\
+    \hline
+\end{tabularx}
+
+The code for every question is in \texttt{a4.py}; this PDF explains how each attack works.
+Write the explanations so that a classmate could follow them: in your own words, without unexplained jargon, and matching what your code actually does.
+
+\section{Version 1: Hashing the Keywords}
+
+\question{1}{15} Explain how \texttt{attack\_unkeyed} works.
+
+\begin{answer}
+    % Write your explanation here.
+\end{answer}
+
+\Needspace{9cm}
+\section{Version 2: The Secure Scheme}
+
+\question{2}{75} Explain how \texttt{attack\_secure} works.
+
+\begin{answer}
+    % Write your explanation here.
+\end{answer}
+
+\Needspace{9cm}
+\section{File Injection}
+
+\question{3}{60} Explain how \texttt{choose\_injected\_documents} and \texttt{attack\_injection} work.
+
+\begin{answer}
+    % Write your explanation here.
+\end{answer}
+
+% Include this section only if you used generative AI.
+% It must be between half a page and one page long, and cannot be written by AI.
+\section*{Generative AI Disclosure}
+
+% Describe how and where you used generative AI, and how helpful it was.
+
+\end{document}
