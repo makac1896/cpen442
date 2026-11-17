@@ -60,7 +60,35 @@ Write the explanations so that a classmate could follow them: in your own words,
 \question{1}{15} Explain how \texttt{attack\_unkeyed} works.
 
 \begin{answer}
-    % Write your explanation here.
+    \textbf{Idea.}
+    In Version 1, Alice turns a keyword $w$ into its query token with $t_w = h(\texttt{"token"} \,\|\, w)$.
+    This formula contains no secret, so the server can evaluate it too.
+    A hash cannot be run backwards, but I do not need to: the server knows the keyword space (all 200 possible keywords), so it can run the formula forwards on every candidate and compare the results with the tokens it received.
+
+    \textbf{Steps.}
+    \begin{enumerate}
+        \item Build a lookup table: for each of the 200 keywords $w$ in the keyword space, compute $h(\texttt{"token"} \,\|\, w)$ and store \texttt{token $\to$ keyword}.
+        \item For each query the server saw, take its token and look it up in the table.
+        The keyword stored next to it is the answer for that query.
+        \item Return the answers in the same order as the queries.
+    \end{enumerate}
+
+    \textbf{Example.}
+    Say the keyword space is \{invoice, meeting, energy, price, contract\}.
+    The table has five rows, e.g.\ \texttt{0c30e2f0...} $\to$ price.
+    If Alice searches for price, the server sees the token \texttt{0c30e2f0...}, finds it in the table, and answers ``price''.
+    The server never needs to look at the document IDs that came back.
+
+    \textbf{Why it is always right.}
+    The hash function is deterministic, so a keyword always gives the same token.
+    It is also (in practice) collision-free, so no two keywords share a token.
+    Hence the token of a query matches exactly one keyword, the one Alice searched for, and the attack recovers every query (QRR $=100\%$).
+    It runs in time proportional to the size of the keyword space plus the number of queries.
+
+    \textbf{Why the hashing does not help Alice.}
+    One-wayness only protects secrets that are hard to guess.
+    Here the set of possible inputs is tiny and public, so trying all of them is cheap, like a dictionary attack on a password hash.
+    Version 2 fixes this by putting a secret key inside the token, which the server cannot compute.
 \end{answer}
 
 \Needspace{9cm}

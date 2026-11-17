@@ -17,8 +17,13 @@ from sse import h, h_key, aes_ctr, access_pattern_to_documents
 
 
 def attack_unkeyed(index, queries, keyword_space) -> list[str]:
-    """Section 3: the "unkeyed" scheme."""
-    return [keyword_space[0] for _ in queries]
+    """Section 3: the "unkeyed" scheme.
+
+    The token of a keyword is h(b"token" + w) and involves no secret, so we compute the
+    token of every keyword in the keyword space and look each query's token up in that table.
+    """
+    token_to_keyword = {h(b"token" + w.encode()): w for w in keyword_space}
+    return [token_to_keyword[token] for token, _documents in queries]
 
 
 def attack_secure(queries, keyword_space, aux_documents, num_documents) -> list[str]:
