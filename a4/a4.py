@@ -15,6 +15,7 @@ The query-recovery attacks return one keyword guess per query, in the same order
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from scipy.special import xlogy
 
 from sse import h, h_key, aes_ctr, access_pattern_to_documents
 
@@ -38,9 +39,14 @@ def _aux_statistics(keyword_space, aux_documents):
     return np.clip(C, eps, 1 - eps)
 
 
-def attack_secure(queries, keyword_space, aux_documents, num_documents, rounds=10, lam=1.0) -> list[str]:
+def _misfit(k, n, p):
+    """Binomial deviance: how badly k matches in n documents fit a keyword with expected fraction p."""
+    return xlogy(k, k) - k * np.log(n * p) + xlogy(n - k, n - k) - (n - k) * np.log(n * (1 - p))
+
+
+def attack_secure(queries, keyword_space, aux_documents, num_documents, rounds=30, lam=1.0) -> list[str]:
     """Section 4: the "secure" scheme."""
-    n, Q = num_documents, len(queries)
+    n, Q, K = num_documents, len(queries), len(keyword_space)
     C = _aux_statistics(keyword_space, aux_documents)
     f = np.diag(C)
 
@@ -50,16 +56,15 @@ def attack_secure(queries, keyword_space, aux_documents, num_documents, rounds=1
     overlap = R.T @ R  # documents shared by each pair of queries
     count = np.diag(overlap)
 
-    freq_cost = (count[:, None] - n * f[None, :]) ** 2 / (2 * n * f * (1 - f))[None, :]
+    freq_cost = _misfit(count[:, None], n, f[None, :])
     _, assignment = linear_sum_assignment(freq_cost)
 
-    off_diagonal = (1.0 - np.eye(Q))[:, None, :]
+    other_query = (1.0 - np.eye(Q))[:, None, :]
     for _ in range(rounds):
         Cp = C[:, assignment]  # co-occurrence of each keyword with the current guesses
-        expected, variance = n * Cp, n * Cp * (1 - Cp)
-        diff = overlap[:, None, :] - expected[None, :, :]
-        overlap_cost = (diff ** 2 / (2 * variance)[None, :, :] * off_diagonal).sum(axis=2)
-        _, new_assignment = linear_sum_assignment(freq_cost + lam * overlap_cost)
+        cost = _misfit(overlap[:, None, :], n, Cp[None, :, :]) * other_query
+        cost = cost * (assignment[None, None, :] != np.arange(K)[None, :, None])  # skip the keyword's own guess
+        _, new_assignment = linear_sum_assignment(freq_cost + lam * cost.sum(axis=2))
         if np.array_equal(new_assignment, assignment):
             break
         assignment = new_assignment

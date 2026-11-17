@@ -97,7 +97,44 @@ Write the explanations so that a classmate could follow them: in your own words,
 \question{2}{75} Explain how \texttt{attack\_secure} works.
 
 \begin{answer}
-    % Write your explanation here.
+    \textbf{What the server can use.}
+    The query tokens are now secret, but each query still shows which of Alice's $n$ documents matched.
+    Two things can be read off this: (a) \emph{how many} documents a query returned, and (b) \emph{how many documents two queries have in common}.
+    The same two numbers can be measured for every keyword on the auxiliary documents: how many contain the keyword, and how many contain a given pair of keywords.
+    Since the auxiliary documents are similar to Alice's, a keyword's numbers there should be close to its numbers in Alice's documents.
+    I also use that the 100 queries are for 100 \emph{different} keywords, so no keyword can be the answer for two queries.
+
+    \textbf{Measuring a mismatch.}
+    Suppose a query returned $k$ of Alice's $n$ documents, and a keyword occurs in a fraction $p$ of the auxiliary documents.
+    I score how badly they fit with the binomial deviance
+    \[ k\ln\frac{k}{np} + (n-k)\ln\frac{n-k}{n(1-p)}, \]
+    which is $0$ when $k = np$ exactly and grows the further $k$ is from what $p$ predicts.
+    (It is the negative log-probability of seeing $k$ matches, up to a constant, so it treats a small difference in a rare keyword as more important than in a common one.)
+    The same score is used for the overlap of two queries, compared with the aux fraction of documents containing both keywords.
+
+    \textbf{Step 1: guess from counts only.}
+    For every (query, keyword) pair, the cost is the mismatch between the query's result count and the keyword's frequency in the aux data.
+    I then pick the cheapest \emph{one-to-one} pairing of queries to keywords (the Hungarian algorithm, \texttt{linear\_sum\_assignment}), so no keyword is used twice.
+    On its own this is weak, because many keywords have similar frequencies (about 12\% of queries correct on the Enron data).
+
+    \textbf{Step 2: improve the guesses with overlaps.}
+    Now use the current guesses of the \emph{other} queries.
+    For query $i$ and a candidate keyword $w$, look at every other query $j$ with its current guess $v$.
+    If $i$ really were $w$, the number of documents shared by $i$ and $j$ should be close to $n \cdot C[w][v]$, the aux co-occurrence of $w$ and $v$.
+    The cost of ``$i$ is $w$'' is the count mismatch from Step 1 plus the sum of these overlap mismatches over all $j$.
+    I skip a $j$ whose current guess is $w$ itself, since a keyword's overlap with itself is just its frequency, not a co-occurrence.
+    Then I solve the one-to-one pairing again with the new costs.
+    Better guesses give better overlap evidence, which gives better guesses, so I repeat this until the pairing stops changing (at most 30 rounds).
+
+    \textbf{Example.}
+    Take the hospital toy: if one query returned 1 of 6 documents it could be asthma, diabetes or fracture by count alone.
+    But it shares no document with the query already identified as Covid, and in the aux data only fracture patients almost never have Covid, so the overlap cost is lowest for fracture.
+
+    \textbf{Results and limits.}
+    On the Enron data, averaged over 10 random splits, the attack recovers about 95\% of the queries in about 0.3 seconds per trial.
+    On a separate set of 30 splits I did not tune on, it gets about 91\%, and it does worse when the aux data or Alice's collection is small (about 64\% and 72\% with a quarter of each).
+    It can fail in an occasional split: if the first guesses are poor, the repeated updates can settle on a wrong pairing.
+    Keywords that look the same to the aux data (similar frequency and similar co-occurrence) cannot be told apart at all.
 \end{answer}
 
 \Needspace{9cm}
