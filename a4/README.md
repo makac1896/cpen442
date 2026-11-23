@@ -40,5 +40,5 @@ Submit `a4.py` and `a4.pdf`.
 
 - [x] `attack_unkeyed`
 - [x] `attack_secure`
-- [ ] `choose_injected_documents` / `attack_injection`
+- [x] `choose_injected_documents` / `attack_injection`
 - [ ] report

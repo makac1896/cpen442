@@ -143,7 +143,45 @@ Write the explanations so that a classmate could follow them: in your own words,
 \question{3}{60} Explain how \texttt{choose\_injected\_documents} and \texttt{attack\_injection} work.
 
 \begin{answer}
-    % Write your explanation here.
+    \textbf{Idea.}
+    Each document I inject tells me, for every query, a yes/no fact: ``does the queried keyword appear in my document?''
+    With three documents, every keyword gets a 3-bit code (which of my documents contain it), so there are 8 groups of keywords.
+    If I can read a query's code from its results, its keyword is one of only about 25 (instead of 200), and the attack of Question 2 has a much easier job.
+    The difficulty is that Alice shuffles her documents, so I first have to find my own three documents among the thousands in the results.
+
+    \textbf{\texttt{choose\_injected\_documents}.}
+    I sort the keywords by how often they occur in the auxiliary documents and deal them out over the 8 codes like cards: the first keyword gets code 0, the second code 1, \dots, the ninth code 0 again.
+    Document $j$ contains every keyword whose code has bit $j$ set, so each injected document holds half of the keyword space.
+    Dealing by frequency puts keywords of similar frequency, the ones Question 2 mixes up most, into different groups.
+    It also means my documents match queries equally often whether the keyword is common or rare, which a normal document does not.
+
+    \textbf{\texttt{attack\_injection}, step 1: find my documents.}
+    I do not know which of Alice's $n+3$ columns are mine, or which is which.
+    Queries are a random half of the keywords, so a document with $s$ keywords should match about $s/2$ queries (give or take a few); columns far from that are ruled out.
+    I then collect candidate triples of columns in two independent ways:
+    \begin{enumerate}
+        \item \emph{Agreement.} Run the plain attack of Question 2 (ignoring the injection), then for each of my documents look for the column that matches a query exactly when the guessed keyword is in that document.
+        \item \emph{Looks like my documents.} Prefer columns whose matches do not depend on how common the query's keyword is (measured by how many results the query had), and triples that split the queries into the 8 code groups of roughly the expected sizes (about 12 queries each).
+    \end{enumerate}
+    Neither is reliable alone (the first fails if the plain attack happens to be poor, the second if Alice's documents are long and look like mine), so I decide between all candidate triples, in every order, by running the matching of Step 3 briefly for each and keeping the one with the lowest cost.
+    A wrong triple gives wrong codes, so its cost is much higher.
+
+    \textbf{Step 2: read each query's code.}
+    A query's code is its pattern over my three columns: which of them it returned.
+    It may only be assigned a keyword with that same code.
+
+    \textbf{Step 3: match.}
+    I remove my three columns, so counts and overlaps describe Alice's real documents (as in Question 2), and run the same one-to-one matching based on counts and overlaps with the aux data, but with each query allowed only the keywords of its group.
+
+    \textbf{Example.}
+    In the hospital toy, inject doc A = \{Covid, flu\} and doc B = \{flu, asthma\}.
+    A query that returns both A and B must be flu, one that returns only B is asthma, one that returns only A is Covid, and one that returns neither is diabetes or fracture, which the counts and overlaps then separate.
+
+    \textbf{Results and limits.}
+    On the Enron data the attack recovers about 99\% of the queries (10 splits; 98.8\% and 99.0\% on two sets of 30 splits), compared with about 95\% without injection, in about 2 seconds.
+    When I made Alice's documents three times longer, or gave myself a quarter of the aux data or of Alice's documents, it still found my documents in every trial and recovered 92--94\% (the attack without injection falls to 66--74\% there).
+    The remaining mistakes are keywords inside the same group that the aux data cannot tell apart.
+    It assumes the queries are a uniformly random subset of the keywords, which the assignment states.
 \end{answer}
 
 % Include this section only if you used generative AI.

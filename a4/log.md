@@ -2,15 +2,15 @@
 
 Working notes: decisions, trade-offs, what was dropped and why, results, assumptions, open questions.
 Newest state of each question is at the top of its section; the history is below it.
-Q3 (file injection): benchmark mode built, attack not started.
+All three questions are implemented and written up.
 
 ## Status
 
 | Question | Code | Report | Latest result |
 |---|---|---|---|
 | Q1 `attack_unkeyed` | done | done | 100% QRR (10/10) |
-| Q2 `attack_secure` | done (v1, tuned) | done | 95.6% on `tests.py` (10 trials), 0.34 s/trial |
-| Q3 injection | benchmark only | not started | baseline (no injection) 94.9% on dev |
+| Q2 `attack_secure` | done (v1, tuned) | done | 95.6% on `tests.py` (10 trials), 0.32 s/trial |
+| Q3 injection | done (v1, tuned) | done | 99.0% on `tests.py` (10 trials), 2.08 s/trial |
 
 ## Repo and tooling decisions
 
@@ -124,7 +124,60 @@ Time of the shipped version in the benchmark: 0.32–0.38 s/trial (default profi
 
 ## Q3 – injection
 
-### Benchmark (done, no attack yet)
+### Final approach (what is in `a4.py`)
+
+**`choose_injected_documents`** (3 documents, i.e. a 3-bit code per keyword):
+1. Sort the keywords by their frequency in the aux data.
+2. Deal them out round-robin over the 8 codes (`rank mod 8`). Document `j` contains every keyword whose code has bit `j` set, so each document has half the keyword space (100 keywords) and each code group has ~25 keywords.
+
+Why round-robin by frequency: keywords with similar frequency are the ones the secure attack confuses most, and this puts neighbours in frequency into different groups. It also makes an injected document match queries *independently of how common the keyword is*, which the column identification below exploits.
+
+**`attack_injection`:**
+1. **Find the injected columns** among the `n+3` shuffled columns. Two independent routes propose candidate sets, and the full fit cost decides (below).
+2. **Decode:** each query's code is its pattern over the three columns, which restricts it to the ~25 keywords with that code.
+3. **Match:** remove the three columns (so counts and overlaps are those of Alice's real documents, `n = num_documents − 3`) and run the same assignment as Q2 (`_match`) with the code restriction (forbidden pairs cost 1e8).
+
+**Column identification in detail** (the hard part: the IDs are shuffled and we do not know which column is which document):
+- *Hit-count prior.* Queries are a random subset of the keywords, so a document with `|S_j|` keywords matches about `|S_j|·Q/K` queries (hypergeometric spread). Columns outside ±4 sd are implausible.
+- *Route A (agreement).* Run the plain Q2 attack ignoring the injection, then score each column by how often "matches the query" agrees with "the guessed keyword is in injected document j". Candidates: the best plausible column per document plus the best raw one.
+- *Route B (no guess needed).* Among plausible columns take the 30 least correlated with the query result counts (injected documents are frequency-independent, natural ones are not). Score each triple by how unbalanced the 8 code groups are (expected sizes are known) plus the correlation. Candidates: the 3 best triples, in all 6 orders.
+- *Decision.* Run the code-restricted matching for every candidate (5 rounds) and keep the one with the lowest total cost. This also fixes the order of the three documents. It is a very strong test: in the one case I inspected the true columns cost 10,941 vs 48,352 for a wrong set.
+
+### Why this and not something simpler (what was tried and dropped)
+
+All on 30 trials; "cols" = % of trials where the injected columns were found (set / right order).
+
+| version | dev | holdout | long_docs | small_aux | small_client | verdict |
+|---|---|---|---|---|---|---|
+| v1: take the 3 columns with most hits, order by fit cost | 98.8 (100%) | 96.5 (97%) | **7.2 (0%)** | 83.2 (87%) | 93.8 (100%) | dropped: natural documents reach 40–48 hits (more than my estimate of ≤35 from document sizes, because the tail across 12k documents is long), overlapping the injected ones' ~50; hopeless when natural documents are long |
+| v2: agreement with the plain attack's guesses only | 97.0 (97%) | | | | | dropped: one trial where the plain attack was only 37% accurate. More passes (2, 3) did not help (fixed point); trying the best 2–4 by agreement did not help either (true column ranked 18th) |
+| v2b: agreement + hit-count prior (shortlist) | 98.8 (100%) | 99.0 (100%) | 92.2 (100%) | 92.1 (100%) | **81.6 (87%)** | fails when the plain attack collapses (~10% accurate with only ~3k natural documents) |
+| v3: independence + code-group balance only | 95.9 (97%) → 98.8 (100%) with the correlation term | 97.2 (97%) | **62.4 (53%)** | 92.1 (100%) | 93.8 (100%) | fails when natural documents are long (true columns not in the 30-column pool; pool 50 and 5 sets only reached 70.0) |
+| **shipped: A and B together, decided by fit cost** | **98.8 (100%)** | **99.0 (100%)** | **92.2 (100%)** | **92.1 (100%)** | **93.8 (100%)** | the two routes fail in different places and the fit cost is a reliable judge |
+
+Reference (no injection, plain Q2 attack): 94.9 / 95.5 / 66.2 / 71.0 / 74.1.
+
+Other measurements:
+- `tau` (independence scale) 0.05 / 0.1 / 0.2: identical on dev. Shortlist 1 / 2 / 3: identical. `top_sets=1` is worse (96.8, one miss) so the fit check across 3 sets earns its cost.
+- Zero collapsed trials (<50%) in every setting for the shipped version. Worst single trial 82–97% depending on the setting.
+- Time: 2.1–2.6 s/trial (limit 10 s). Most of it is ~25 restricted solves of 5 rounds each.
+- Official harness: `python tests.py --trials 10` → injection 99.0%, 2.08 s (44.0/40 points).
+
+### Assumptions
+- The 100 queries are a uniformly random subset of the keywords (stated in the handout). Used for the hit-count prior; if no column is plausible it falls back to considering all columns, and Route A always also tries the best raw column.
+- Injected documents are exactly the ones returned by `choose_injected_documents` (intersected with the keyword space, as `tests.py` does). `attack_injection` re-derives each keyword's code from the `injected_documents` argument and does not rely on anything stored from part 1.
+- At most 3 documents are used (`MAX_PLANTED`), so at most 3! = 6 orders per set.
+- Nothing is read from files and nothing is Enron-specific.
+
+### Caveats and open questions
+- **Holdout is not clean.** I looked at holdout numbers while choosing between v1/v2b/v3, so the 99.0% there is less independent than it looks. A third seed range would be a fair final test.
+- **Only the Enron data**, plus stress profiles. `long_docs` (three documents merged) is my stand-in for news-like data, not a real dataset.
+- **Remaining errors** are mostly keywords that look identical to the aux data inside the same code group; a smarter keyword-to-code assignment (using co-occurrence, not only frequency) might help.
+- `lam` and `rounds` were tuned for Q2 and not re-tuned for the code-restricted problem.
+- **Time:** 2.1–2.6 s of 10 s. If the grading machine is much slower this is the thing to watch; `top_sets`, `PRE_ROUNDS` and the candidate count can be reduced.
+- The probe candidate `plan=probe` and the `plan=none` baseline in `lab.py` are for the harness only.
+
+### Benchmark
 
 `python bench.py --mode injection "plan=none" "plan=probe"` (add `--seeds holdout`, `--profile ...`).
 
@@ -144,11 +197,3 @@ Reference QRR for `plan=none` (dev seeds, 30 trials), the numbers an injection a
 | small_client | 74.1 ± 2.74 | 2 | 0.55 |
 
 Natural document sizes on Enron (keywords per document, out of 200): mean 13.6, median 10, p95 41, p99 58, max 70. With about half the keywords queried, a natural document appears in about 7 queries on average (at most ~35), a planted document with ~100 keywords in ~50.
-
-### Planning notes
-
-Ideas recorded from planning (untested):
-- 3 injected documents give 2³ = 8 membership codes, which splits the keyword space into ~25-word groups.
-- Choose the groups from aux statistics so that easily confused keywords get different codes.
-- The injected documents must be recognisable among Alice's shuffled documents (they match many queries; natural documents match few), and the order of the three must be resolved.
-- Counts in the secure-attack machinery must account for the injected documents, and `num_documents` includes them.
