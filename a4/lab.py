@@ -59,4 +59,10 @@ def injection(plan="none", **opts):
             return a4.attack_secure(queries, keyword_space, aux, n), {"columns": [int(hits.argmax())]}
         return (lambda keyword_space, max_documents, aux: [set(keyword_space)]), attack
 
+    if plan == "codes":  # the shipped Q3 attack, with the columns it found reported for diagnostics
+        def attack(queries, keyword_space, aux, n, injected):
+            assignment, columns = a4._injection_core(queries, keyword_space, aux, n, injected, **opts)
+            return [keyword_space[k] for k in assignment], {"columns": [int(c) for c in columns]}
+        return a4.choose_injected_documents, attack
+
     raise ValueError(plan)
