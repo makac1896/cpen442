@@ -119,6 +119,9 @@ def _injection_core(queries, keyword_space, aux_documents, num_documents, inject
     C = _aux_statistics(keyword_space, aux_documents)
     R = _result_matrix(queries, num_documents)
     overlap = R.T @ R
+    if d == 0:  # nothing injected: the plain attack
+        assignment, _ = _match(overlap, num_documents, C, rounds=rounds)
+        return assignment, []
     keyword_code = np.array([[w in doc for doc in injected_documents] for w in keyword_space]).reshape(K, d)
     bits = 1 << np.arange(d)
 
